@@ -1,0 +1,77 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/shm.h>
+#include <string.h>
+
+#define SHM_SIZE 1024
+
+int main()
+{
+    int shmid;
+    char *shmaddr;
+    char message[] = "Hello, world!";
+
+    // Create a shared memory segment
+    shmid = shmget(IPC_PRIVATE, SHM_SIZE, IPC_CREAT | 0666);
+    if (shmid == -1) {
+        perror("shmget");
+        exit(1);
+    }
+
+    // Attach the shared memory segment to our process's address space
+    shmaddr = shmat(shmid, NULL, 0);
+    if (shmaddr == (char *) -1) {
+        perror("shmat");
+        exit(1);
+    }
+
+    // Write the message to the shared memory segment
+    strcpy(shmaddr, message);
+
+    // Fork a child process
+    pid_t pid = fork();
+    if (pid == -1) {
+        perror("fork");
+        exit(1);
+    }
+
+    if (pid == 0) {  // Child process
+        // Read the message from the shared memory segment
+        printf("Child process received: %s\n", shmaddr);
+
+        // Detach the shared memory segment from our process's address space
+        if (shmdt(shmaddr) == -1) {
+            perror("shmdt");
+            exit(1);
+        }
+
+        // Destroy the shared memory segment
+        if (shmctl(shmid, IPC_RMID, NULL) == -1) {
+            perror("shmctl");
+            exit(1);
+        }
+
+        exit(0);
+    } else {  // Parent process
+        // Wait for the child process to finish
+        if (wait(NULL) == -1) {
+            perror("wait");
+            exit(1);
+        }
+
+        // Detach the shared memory segment from our process's address space
+        if (shmdt(shmaddr) == -1) {
+            perror("shmdt");
+            exit(1);
+        }
+
+        // Destroy the shared memory segment
+        if (shmctl(shmid, IPC_RMID, NULL) == -1) {
+            perror("shmctl");
+            exit(1);
+        }
+
+        exit(0);
+    }
+}
